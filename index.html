@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rhythm Analytics — Magnet Poetry</title>
+<style>
+  :root{
+    --bg:#1c1f26; --bg2:#23272f;
+    --tile:#f4efe4; --ink:#1a1a1a;
+    --muted:#868c96; --line:#313641;
+    --obj:#b07d4a; --act:#5f9e6e; --qual:#6f8fb0; --glue:#9a8f72;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{
+    display:flex;flex-direction:column;height:100vh;overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:radial-gradient(120% 120% at 50% -10%, var(--bg2), var(--bg) 70%);
+    color:#e7e7e7;user-select:none;-webkit-user-select:none;
+  }
+
+  /* ---- header ---- */
+  header{
+    flex:0 0 auto;display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+    padding:12px 22px;border-bottom:1px solid var(--line);
+    background:rgba(18,20,25,.6);
+  }
+  .titlewrap{margin-right:auto;}
+  h1{font-size:14px;letter-spacing:.32em;font-weight:700;margin:0;text-transform:uppercase;color:#fff;}
+  .sub{font-size:11px;color:var(--muted);letter-spacing:.04em;margin-top:2px;}
+  .controls{display:flex;align-items:center;gap:10px;}
+  .toggle{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;}
+  .toggle button{
+    background:transparent;color:var(--muted);border:0;cursor:pointer;
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;padding:7px 15px;transition:.15s;
+  }
+  .toggle button.on{background:#d8c8a0;color:#1a1a1a;font-weight:700;}
+  .btn{
+    background:transparent;border:1px solid var(--line);color:#cfd3da;border-radius:999px;
+    cursor:pointer;font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:7px 15px;transition:.15s;
+  }
+  .btn:hover{border-color:#d8c8a0;color:#fff;}
+
+  /* ---- stage: bank (left) + canvas (right) ---- */
+  .stage{flex:1 1 auto;display:flex;min-height:0;}
+  .bank{
+    width:42%;min-width:300px;max-width:560px;overflow-y:auto;
+    padding:16px 16px 60px;border-right:1px solid var(--line);background:rgba(0,0,0,.13);
+  }
+  .canvas{flex:1 1 auto;position:relative;overflow:hidden;}
+  .hint{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    color:#41464f;font-size:15px;letter-spacing:.1em;text-transform:lowercase;
+    pointer-events:none;text-align:center;width:80%;
+  }
+  .genpanel{
+    position:absolute;top:14px;right:16px;z-index:60;width:196px;
+    display:flex;flex-direction:column;gap:10px;
+    background:rgba(28,31,38,.85);border:1px solid #3a3f49;border-radius:10px;
+    padding:13px 15px;backdrop-filter:blur(4px);box-shadow:0 8px 22px rgba(0,0,0,.45);
+  }
+  .genbtn{
+    background:#d8c8a0;color:#1a1a1a;border:0;border-radius:999px;cursor:pointer;
+    font:600 11px/1 ui-monospace,monospace;letter-spacing:.16em;text-transform:uppercase;
+    padding:9px 16px;transition:.15s;
+  }
+  .genbtn:hover{transform:translateY(-1px);}
+  .genbtn:active{transform:translateY(0);}
+  .slab{display:flex;flex-direction:column;gap:5px;font:600 9.5px/1 ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase;color:#9aa0aa;}
+  .slab .val{color:#d8c8a0;}
+  .slab input[type=range]{width:100%;accent-color:#d8c8a0;cursor:pointer;margin:0;}
+  .reglabels{display:flex;justify-content:space-between;font:400 9px/1 ui-monospace,monospace;letter-spacing:.08em;color:#5d626b;text-transform:uppercase;margin-top:-6px;}
+
+  /* ---- category sections in the bank ---- */
+  .cat{margin-bottom:20px;}
+  .cat-label{
+    display:flex;align-items:baseline;justify-content:space-between;
+    font:600 11px/1 ui-monospace,monospace;letter-spacing:.18em;text-transform:uppercase;
+    padding-bottom:6px;margin-bottom:10px;border-bottom:1px solid var(--line);
+  }
+  .cat-label .n{color:var(--muted);font-weight:400;letter-spacing:.08em;}
+  .cat-tiles{display:flex;flex-wrap:wrap;gap:7px;}
+  .c-obj  .cat-label, .cat-label.c-obj {color:var(--obj);}
+  .c-act  .cat-label, .cat-label.c-act {color:var(--act);}
+  .c-qual .cat-label, .cat-label.c-qual{color:var(--qual);}
+  .c-glue .cat-label, .cat-label.c-glue{color:var(--glue);}
+
+  /* ---- tiles ---- */
+  .tile{
+    background:var(--tile);color:var(--ink);padding:5px 9px 6px;border-radius:2px;
+    box-shadow:0 1px 0 rgba(0,0,0,.18), 0 4px 10px rgba(0,0,0,.4);
+    cursor:grab;font-size:15px;line-height:1.12;touch-action:none;
+    border-left:3px solid var(--glue);
+  }
+  .tile.obj {border-left-color:var(--obj);}
+  .tile.act {border-left-color:var(--act);}
+  .tile.qual{border-left-color:var(--qual);}
+  .tile.glue{border-left-color:var(--glue);}
+  .bank .tile.word, .bank .tile.phrase{font-family:"Georgia","Times New Roman",serif;}
+  .bank .tile.phrase{white-space:nowrap;}   /* keep each phrase on a single line */
+  .bank .tile:active{cursor:grabbing;}
+
+  /* canvas tiles: free-positioned, flat, clean reading */
+  .canvas .tile{
+    position:absolute;white-space:nowrap;
+    font-family:"Georgia","Times New Roman",serif;font-size:18px;
+    box-shadow:0 3px 0 rgba(0,0,0,.2), 0 12px 26px rgba(0,0,0,.5);
+  }
+  /* the floating ghost lives on <body> mid-drag, so style it independent of parent */
+  .tile.grabbing{
+    cursor:grabbing;
+    font-family:"Georgia","Times New Roman",serif;font-size:18px;
+    white-space:nowrap;
+    box-shadow:0 4px 0 rgba(0,0,0,.25),0 18px 34px rgba(0,0,0,.6);
+  }
+
+  footer{
+    flex:0 0 auto;padding:7px 22px;border-top:1px solid var(--line);
+    font:10px/1.4 ui-monospace,monospace;letter-spacing:.05em;color:#5d626b;
+    display:flex;gap:22px;flex-wrap:wrap;
+  }
+  footer .key{color:#787e88;}
+
+  /* ---- about modal ---- */
+  .overlay{
+    position:fixed;inset:0;z-index:10000;display:none;
+    align-items:center;justify-content:center;padding:24px;
+    background:rgba(10,12,16,.72);backdrop-filter:blur(3px);
+  }
+  .overlay.show{display:flex;}
+  .modal{
+    position:relative;max-width:560px;width:100%;max-height:86vh;overflow-y:auto;
+    background:#23272f;border:1px solid #3a3f49;border-radius:10px;
+    padding:30px 34px;box-shadow:0 24px 60px rgba(0,0,0,.6);
+    color:#dfe2e7;font-size:14.5px;line-height:1.55;
+  }
+  .modal h2{font-size:15px;letter-spacing:.06em;margin:0 0 16px;color:#fff;}
+  .modal h3{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#d8c8a0;margin:24px 0 9px;}
+  .modal p{margin:0 0 12px;}
+  .modal ul{margin:0 0 12px;padding-left:18px;}
+  .modal li{margin:0 0 8px;}
+  .modal b{color:#fff;font-weight:600;}
+  .modal-close{
+    position:absolute;top:10px;right:14px;background:transparent;border:0;color:#868c96;
+    font-size:24px;line-height:1;cursor:pointer;padding:4px;
+  }
+  .modal-close:hover{color:#fff;}
+</style>
+</head>
+<body>
+<header>
+  <div class="titlewrap">
+    <h1>Rhythm Analytics</h1>
+    <div class="sub">found language from music-tech press releases · Apr–Jun 2026 · SFPC</div>
+  </div>
+  <div class="controls">
+    <div class="toggle" id="mode">
+      <button data-mode="words" class="on">Words</button>
+      <button data-mode="phrases">Phrases</button>
+    </div>
+    <button class="btn" id="clear">Clear canvas</button>
+    <button class="btn" id="about">about</button>
+  </div>
+</header>
+
+<div class="stage">
+  <div class="bank" id="bank"></div>
+  <div class="canvas" id="canvas">
+    <div class="genpanel">
+      <button class="genbtn" id="gen">✦ suggest a poem</button>
+      <label class="slab">length <span class="val" id="lenVal">4</span>
+        <input type="range" id="len" min="2" max="8" value="4"></label>
+      <label class="slab">register
+        <input type="range" id="reg" min="0" max="100" value="50"></label>
+      <div class="reglabels"><span>loud</span><span>quiet</span></div>
+    </div>
+    <div class="hint" id="hint">your poem — drag magnets here, or ✦ suggest one</div>
+  </div>
+</div>
+
+<footer>
+  <span><span class="key">drag</span> from the bank to compose</span>
+  <span><span class="key">drag a tile back over the bank</span> (or double-click) to remove it</span>
+  <span><span class="key">arc:</span> conquest → harvest → anesthesia</span>
+</footer>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <button class="modal-close" id="aboutClose" aria-label="close">×</button>
+    <h2>About this board</h2>
+
+    <p>Every word and phrase here is real. Each one comes from a music-technology press
+       release — the announcements companies put out about new apps, tools, and deals.</p>
+    <p>I collected them one week at a time, between April and June 2026. I kept the lines
+       that made me stop and look twice. Some sound almost human. Some describe music, and
+       the people who make it, in strange ways.</p>
+    <p>This began as my project for a class at the School for Poetic Computation, called
+       Rhythm Analytics.</p>
+
+    <h3>How to use it</h3>
+    <ul>
+      <li>The left side is your word bank, sorted into objects, actions, qualities, and
+          connectors. Use the toggle at the top to switch between single words and whole phrases.</li>
+      <li>Drag any tile onto the right side to add it to your poem. To remove a tile, drag it
+          back to the left, or double-click it.</li>
+      <li>Not sure where to start? Press <b>suggest a poem</b> for a first draft, then change
+          it however you want.</li>
+      <li><b>Clear canvas</b> wipes the page so you can begin again.</li>
+      <li>Your poem stays in place when you switch between words and phrases, so you can mix the two.</li>
+    </ul>
+
+    <h3>Why it exists</h3>
+    <p>The tools these press releases describe are made to be fast and automatic, and to work
+       without much help from you. This board is the opposite. It is slow, it is made by hand,
+       and it can only ever rearrange words the industry already said out loud.</p>
+    <p>Reading those words back as poetry is a way to hear what they actually mean.</p>
+  </div>
+</div>
+
+<script>
+/* ---- corpus: [text, category]  cat: obj | act | qual | glue ---- */
+const PHRASES = [
+  // Final week (Jun 1)
+  ["Character lock system","obj"],
+  ["Intervene while you're still asleep","act"],
+  ["Precisely timed audio interventions","obj"],
+  ["Wrote tonight's story based on last night's data","act"],
+  ["Quiet system","obj"],
+  ["The data is here","glue"],
+  ["Set to shuffle","glue"],
+  ["A problem of infrastructure as much as taste","obj"],
+  ["Pipes insight back in","act"],
+  ["Lifts dwell time","act"],
+  ["Model family","obj"],
+  ["Higher musicality","qual"],
+  // Week 5
+  ["Meatbag email","obj"],
+  ["Scrapyard noise","obj"],
+  ["No organics on the list","glue"],
+  ["Waiting for the clock","glue"],
+  ["Pick your receiver","act"],
+  ["Rich content posts","obj"],
+  ["Full interaction history","obj"],
+  ["Level 4 fan","obj"],
+  ["Artist-fan worlds","obj"],
+  ["Break out of the box","act"],
+  ["Extend the lifecycle of their music","act"],
+  ["Turn listening into creation","act"],
+  ["Immediately build on top of it","act"],
+  // Week 4
+  ["Wave of performance-led trends","obj"],
+  ["Converting intent","act"],
+  ["Capturing user intent at the moment of discovery","act"],
+  ["Extending the lifecycle of releases","act"],
+  ["Accelerating fan acquisition","act"],
+  ["Value amplifier","obj"],
+  ["Authentic artistic process","obj"],
+  ["Detection and exclusion of industrial production","obj"],
+  ["For You universe","obj"],
+  ["Legitimate interests","obj"],
+  ["Partial human intervention","obj"],
+  ["Derivatives pipeline","obj"],
+  ["New interactive value-added services","obj"],
+  ["Human-created musical parts","obj"],
+  ["Activate catalogs","act"],
+  ["Wave of transparency","obj"],
+  ["Slips away in a blur","act"],
+  ["Listening was only the beginning","glue"],
+  ["Get more out of every day","act"],
+  ["Mood and goals","obj"],
+  // Week 3
+  ["No artifacts","glue"],
+  ["Fresh creative outcome","obj"],
+  ["Unmistakably yours","qual"],
+  ["Drum highway","obj"],
+  ["Immediate mashups","obj"],
+  ["Progressing through the pass","act"],
+  ["Inability to tell a real human from a script","obj"],
+  ["Traditional defenses","obj"],
+  ["Verify humanness","act"],
+  ["Exactly that: People","glue"],
+  ["Like furniture. Like wallpaper. Like air","glue"],
+  ["Back swung on its hinges","act"],
+  ["White knight figure","obj"],
+  ["Hurtling back to the groovy past","act"],
+  ["A very new opportunity to be even more interactive","obj"],
+  // Week 2
+  ["In real time, sometimes even in reverse order","glue"],
+  ["Hyper creativity","obj"],
+  ["Amplify the instinct","act"],
+  ["The most human instrument","obj"],
+  ["Decision journey","obj"],
+  ["Emerging discovery surface","obj"],
+  ["Blended marketplace","obj"],
+  ["The operating system for every aspect of live","obj"],
+  ["Every gate that opens","obj"],
+  ["Escalation to human review","obj"],
+  ["Distribution integrity","obj"],
+  ["Raw horsepower","obj"],
+  ["Value creation plan","obj"],
+  ["Attractive long-term earnings growth algorithm","obj"],
+  ["Positive mix-shift","obj"],
+  ["Long tail of low-quality noise","obj"],
+  ["Bad-actor gamesmanship","obj"],
+  // Week 1
+  ["Prompt for specific elements","act"],
+  ["Advanced musical awareness","obj"],
+  ["Matches your style for everything","act"],
+  ["Iterate on comprehensive songs","act"],
+  ["Versatile part of my arsenal","obj"],
+  ["Bring that firepower","act"],
+  ["Turbocharge our joint mission","act"],
+  ["Embodied and agentic","qual"],
+  ["Leaning into the future","act"],
+  ["Fuse their identity","act"],
+  ["Live adaptive meditation","obj"],
+  ["Music-based entertainment","obj"],
+  ["Fan engagement portfolio","obj"],
+  ["Commercially meaningful moments","obj"],
+  ["Rollout for the fall-off","obj"],
+  ["Complete spectrum of musical talent","obj"],
+];
+
+/* ---- word-level part-of-speech sets (everything else => object/noun) ---- */
+const VERB = new Set(["intervene","wrote","based","set","pipes","lifts","pick","break","extend","turn","build","converting","capturing","extending","accelerating","activate","slips","get","progressing","verify","swung","hurtling","amplify","opens","matches","iterate","bring","turbocharge","leaning","fuse","prompt","tell","waiting","listening"]);
+const QUAL = new Set(["precisely","timed","quiet","higher","rich","full","performance-led","authentic","artistic","industrial","legitimate","partial","human","interactive","value-added","human-created","musical","fresh","creative","unmistakably","immediate","real","traditional","white","groovy","hyper","blended","raw","attractive","long-term","positive","low-quality","bad-actor","specific","advanced","comprehensive","versatile","joint","embodied","agentic","adaptive","music-based","commercially","meaningful","complete","emerging","operating","new","exactly","last"]);
+const CONN = new Set(["while","you're","still","on","the","is","here","to","a","of","as","much","back","in","no","for","your","their","it","into","at","and","you","away","was","only","more","every","from","that","like","its","very","even","sometimes","through","out","my","our","top","be","most","yours","everything","4"]);
+
+function wordCat(w){
+  if(VERB.has(w)) return "act";
+  if(QUAL.has(w)) return "qual";
+  if(CONN.has(w)) return "glue";
+  return "obj";
+}
+function buildWords(){
+  const seen=new Set(), out=[];
+  for(const [text] of PHRASES){
+    for(let raw of text.split(/\s+/)){
+      const w=raw.toLowerCase().replace(/^[^a-z0-9'\-]+|[^a-z0-9'\-]+$/g,"");
+      if(w && !seen.has(w)){ seen.add(w); out.push([w, wordCat(w)]); }
+    }
+  }
+  return out;
+}
+const WORDS = buildWords();
+
+const ORDER = ["obj","act","qual","glue"];
+const LABELS = {
+  words:   {obj:"Objects · nouns", act:"Actions · verbs", qual:"Qualities · adj / adv", glue:"Connectors"},
+  phrases: {obj:"Objects", act:"Actions", qual:"Qualities", glue:"Transitions"},
+};
+
+const bank   = document.getElementById("bank");
+const canvas = document.getElementById("canvas");
+let mode = "words";
+let z = 10;
+
+function rand(a,b){ return a + Math.random()*(b-a); }
+
+/* ---- build the organized left-hand bank ---- */
+function renderBank(){
+  bank.innerHTML = "";
+  const items = (mode === "words") ? WORDS : PHRASES;
+  const cls = (mode === "words") ? "word" : "phrase";
+  for(const cat of ORDER){
+    const group = items.filter(([,c]) => c === cat);
+    if(!group.length) continue;
+    const sec = document.createElement("div");
+    sec.className = "cat";
+    sec.innerHTML =
+      '<div class="cat-label c-'+cat+'">'+LABELS[mode][cat]+
+      '<span class="n">'+group.length+'</span></div>';
+    const wrap = document.createElement("div");
+    wrap.className = "cat-tiles";
+    for(const [text] of group){
+      const t = document.createElement("div");
+      t.className = "tile "+cls+" "+cat;
+      t.textContent = text;
+      t.style.transform = "rotate("+rand(-2.5,2.5).toFixed(2)+"deg)";
+      wrap.appendChild(t);
+    }
+    sec.appendChild(wrap);
+    bank.appendChild(sec);
+  }
+}
+
+/* ---- drag: while dragging, a tile floats in viewport coords (fixed, on <body>) so it can
+   follow the cursor across BOTH panes; it only lands on the canvas if dropped there ---- */
+let drag = null, crect = null;
+
+function moveGhost(e){
+  drag.el.style.left = (e.clientX - drag.dx) + "px";
+  drag.el.style.top  = (e.clientY - drag.dy) + "px";
+}
+function beginDrag(el, e, dx, dy){
+  crect = canvas.getBoundingClientRect();
+  if(dx === undefined){                 // existing tile: keep the point you grabbed it by
+    const r = el.getBoundingClientRect();
+    dx = e.clientX - r.left;
+    dy = e.clientY - r.top;
+  }
+  drag = { el, dx, dy };
+  el.classList.add("grabbing");
+  el.style.position = "fixed";          // lift out so it follows the cursor anywhere
+  el.style.zIndex = 99999;
+  document.body.appendChild(el);
+  document.getElementById("hint").style.display = "none";
+  moveGhost(e);
+}
+
+// click a word/phrase in the bank -> spawn a copy that follows the cursor
+bank.addEventListener("pointerdown", e=>{
+  const src = e.target.closest(".tile");
+  if(!src) return;
+  e.preventDefault();
+  const el = document.createElement("div");
+  el.className = "tile " + [...src.classList].filter(c=>["obj","act","qual","glue"].includes(c)).join(" ");
+  el.textContent = src.textContent;
+  beginDrag(el, e, 16, 14);
+});
+
+// pick up a tile already on the canvas
+canvas.addEventListener("pointerdown", e=>{
+  const el = e.target.closest(".tile");
+  if(!el) return;
+  e.preventDefault();
+  beginDrag(el, e);
+});
+
+window.addEventListener("pointermove", e=>{
+  if(!drag) return;
+  moveGhost(e);
+});
+
+window.addEventListener("pointerup", e=>{
+  if(!drag) return;
+  const el = drag.el;
+  el.classList.remove("grabbing");
+  const overCanvas = e.clientX >= crect.left && e.clientX <= crect.right &&
+                     e.clientY >= crect.top  && e.clientY <= crect.bottom;
+  if(overCanvas){                       // commit into the canvas where you dropped it
+    el.style.position = "absolute";
+    el.style.zIndex = ++z;
+    let x = e.clientX - drag.dx - crect.left;
+    let y = e.clientY - drag.dy - crect.top;
+    x = Math.max(0, Math.min(x, canvas.clientWidth  - el.offsetWidth));
+    y = Math.max(0, Math.min(y, canvas.clientHeight - el.offsetHeight));
+    el.style.left = x + "px";
+    el.style.top  = y + "px";
+    canvas.appendChild(el);
+  } else {
+    el.remove();                        // dropped over the bank (or off-canvas) => discard
+  }
+  drag = null;
+  updateHint();
+});
+
+canvas.addEventListener("dblclick", e=>{
+  const el = e.target.closest(".tile");
+  if(el){ el.remove(); updateHint(); }
+});
+
+/* ---- controls ---- */
+function clearTiles(){ canvas.querySelectorAll(".tile").forEach(t=>t.remove()); }
+function updateHint(){
+  document.getElementById("hint").style.display = canvas.querySelector(".tile") ? "none" : "";
+}
+
+/* ---- poem generator: composes spare, Gregory-Orr-ish verse using ONLY the corpus ---- */
+function pickFrom(a){ return a[Math.floor(Math.random()*a.length)]; }
+function tk(t,c){ return {t:String(t).toLowerCase(), c}; }
+
+/* emotional register: 0 = loud / conquest, 1 = quiet / anesthesia (set by the slider) */
+let register = 0.5;
+const LOUD  = ["firepower","horsepower","arsenal","turbocharge","mission","defenses","gamesmanship","raw","hyper","bring","break","growth","swung","hurtling","accelerating","acquisition","bad-actor","opens","lock","amplify","activate","prompt"];
+const QUIET = ["quiet","blur","wallpaper","furniture","air","meditation","mood","dwell","shuffle","instinct","listening","leaning","slips","away","still","adaptive","groovy","beginning","taste","insight","musicality","asleep"];
+const TONE = {};
+LOUD.forEach(w=>TONE[w]=0.08);
+QUIET.forEach(w=>TONE[w]=0.92);
+const toneOf = w => (w in TONE) ? TONE[w] : 0.5;
+function phraseTone(text){
+  const vals = [];
+  for(let raw of text.toLowerCase().split(/\s+/)){
+    const w = raw.replace(/^[^a-z0-9'\-]+|[^a-z0-9'\-]+$/g,"");
+    if(w in TONE) vals.push(TONE[w]);
+  }
+  return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0.5;
+}
+function wpick(pool, toneFn){            // weighted pick, biased toward the current register
+  let total=0; const w=pool.map(it=>{ const x=Math.pow(1-Math.abs(toneFn(it)-register),3)+0.10; total+=x; return x; });
+  let r=Math.random()*total;
+  for(let i=0;i<pool.length;i++){ r-=w[i]; if(r<=0) return pool[i]; }
+  return pool[pool.length-1];
+}
+
+const OBJ   = WORDS.filter(([w,c])=>c==="obj" && !w.endsWith("'s")).map(x=>x[0]);
+const ADJ   = WORDS.filter(([,c])=>c==="qual").map(x=>x[0]);
+const BASEV = ["amplify","verify","activate","extend","break","turn","build","pick","bring","fuse","prompt","iterate","intervene","set"];
+const INTOV = ["slips","get","break","leaning","hurtling","progressing"];
+const GER   = ["capturing","converting","extending","accelerating","emerging","operating","leaning","listening"];
+
+const N =()=>tk(wpick(OBJ,  toneOf),"obj");
+const A =()=>tk(wpick(ADJ,  toneOf),"qual");
+const BV=()=>tk(wpick(BASEV,toneOf),"act");
+const IV=()=>tk(wpick(INTOV,toneOf),"act");
+const GV=()=>tk(wpick(GER,  toneOf),"act");
+const G =w=>tk(w,"glue");
+const phrasePick = ()=> wpick(PHRASES, p=>phraseTone(p[0]));
+
+/* spare image-fragments — no copula, so no number/article disagreement */
+const OPENERS = [
+  ()=>[BV(),G("the"),N()],
+  ()=>[BV(),G("your"),N()],
+  ()=>[G("no"),N()],
+  ()=>{ const p=phrasePick(); return [tk(p[0],p[1])]; },
+];
+const BODY = [
+  ()=>[G("the"),A(),N()],
+  ()=>[A(),N()],
+  ()=>[G("the"),N(),G("of"),N()],
+  ()=>[N(),G("like"),N()],
+  ()=>[G("your"),N()],
+  ()=>[BV(),G("the"),N()],
+  ()=>[IV(),G("into"),G("the"),N()],
+  ()=>[GV(),N()],
+];
+const CLOSERS = [
+  ()=>[tk("unmistakably","qual"),G("yours")],
+  ()=>[G("the"),G("most"),tk("human","qual"),N()],
+  ()=>[G("still"),G("here")],
+  ()=>[G("back"),G("to"),G("the"),N()],
+];
+
+function poemLength(){ return +document.getElementById("len").value; }   // body lines, 2–8
+
+function generatePoem(){
+  const body = poemLength();
+  const lines = [ pickFrom(OPENERS)(), null ];
+  for(let i=0;i<body;i++) lines.push(pickFrom(BODY)());
+  if(body>=4 && Math.random()<0.7){                 // longer poems earn a refrain or a whole phrase
+    lines.push(null);
+    if(Math.random()<0.5) lines.push([G("like"),N()],[G("like"),N()],[G("like"),N()]);
+    else { const p=phrasePick(); lines.push([tk(p[0],p[1])]); }
+  }
+  lines.push(null, pickFrom(CLOSERS)());
+  return lines;
+}
+
+/* phrase-mode: a poem built ONLY from whole phrases, one phrase per line,
+   arced across categories (motion → mixed body → intimate/short close) */
+function generatePhrasePoem(){
+  const pools = {obj:[],act:[],qual:[],glue:[]};
+  for(const [t,c] of PHRASES) pools[c].push([t,c]);
+  const used = new Set();
+  const draw = cats => {
+    for(const c of cats.concat(["obj","act","glue","qual"])){      // preference + fallback
+      const avail = pools[c].filter(p=>!used.has(p[0]));
+      if(avail.length){ const p=wpick(avail, q=>phraseTone(q[0])); used.add(p[0]); return [{t:p[0], c:p[1]}]; }
+    }
+    return null;
+  };
+  const body = poemLength();
+  const lines = [ draw(["act","obj"]), null ];                     // opener: set it in motion
+  for(let i=0;i<body;i++) lines.push(draw(i%2 ? ["obj","glue","act"] : ["act","obj","glue"]));
+  lines.push(null, draw(["qual","glue","obj"]));                   // closer: intimate / short
+  return lines;
+}
+
+function layoutPoem(lines){
+  clearTiles();
+  const left=42, gap=8, lineGap=12, stanzaGap=22;
+  let y=42;
+  for(const line of lines){
+    if(line===null){ y+=stanzaGap; continue; }
+    let x=left, h=0;
+    for(const item of line){
+      const el=document.createElement("div");
+      el.className="tile "+item.c;
+      el.textContent=item.t;
+      canvas.appendChild(el);
+      el.style.left=x+"px"; el.style.top=y+"px"; el.style.zIndex=++z;
+      x += el.offsetWidth + gap;
+      h = Math.max(h, el.offsetHeight);
+    }
+    y += h + lineGap;
+  }
+  updateHint();
+}
+
+/* ---- controls ---- */
+document.getElementById("mode").addEventListener("click", e=>{
+  const b = e.target.closest("button");
+  if(!b) return;
+  mode = b.dataset.mode;
+  [...e.currentTarget.children].forEach(c=>c.classList.toggle("on", c===b));
+  renderBank();          // swap the palette only — leave the canvas (poem) intact
+  updateHint();
+});
+document.getElementById("clear").addEventListener("click", ()=>{ clearTiles(); updateHint(); });
+document.getElementById("gen").addEventListener("click", ()=>
+  layoutPoem(mode === "phrases" ? generatePhrasePoem() : generatePoem()));
+document.getElementById("reg").addEventListener("input", e=>{ register = +e.target.value/100; });
+document.getElementById("len").addEventListener("input", e=>{ document.getElementById("lenVal").textContent = e.target.value; });
+
+/* about modal: open via button, close via ×, click-outside, or Escape */
+const overlay = document.getElementById("overlay");
+function showAbout(v){ overlay.classList.toggle("show", v); }
+document.getElementById("about").addEventListener("click", ()=>showAbout(true));
+document.getElementById("aboutClose").addEventListener("click", ()=>showAbout(false));
+overlay.addEventListener("click", e=>{ if(e.target===overlay) showAbout(false); });
+window.addEventListener("keydown", e=>{ if(e.key==="Escape") showAbout(false); });
+
+renderBank();
+updateHint();
+</script>
+</body>
+</html>
